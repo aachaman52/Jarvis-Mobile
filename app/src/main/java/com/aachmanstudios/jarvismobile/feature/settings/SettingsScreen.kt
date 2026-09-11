@@ -10,15 +10,16 @@ import androidx.compose.ui.unit.dp
 import com.aachmanstudios.jarvismobile.core.model.*
 import com.aachmanstudios.jarvismobile.data.repository.Settings
 
-@Composable fun SettingsScreen(s:Settings,model:ModelState,busy:Boolean,save:(String,String)->Unit,select:()->Unit,load:()->Unit,unload:()->Unit,device:DeviceState){
+@Composable fun SettingsScreen(s:Settings,model:ModelState,busy:Boolean,save:(String,String)->Unit,onOpenModelManager:()->Unit,device:DeviceState){
  Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
- Text("Local model",style=MaterialTheme.typography.titleLarge)
- Text(s.modelName.ifBlank{"No GGUF selected"})
- Text(when(model){ModelState.Unloaded->"Unloaded";ModelState.Loading->"Loading…";is ModelState.Ready->"Loaded · ${model.context} context";is ModelState.Error->model.message})
- Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
- Button(onClick=select,enabled=!busy){Text("Select GGUF")}
- Button(onClick=load,enabled=!busy&&s.modelPath.isNotEmpty()){Text("Load")}
- TextButton(onClick=unload,enabled=!busy){Text("Unload")}
+ Text("Active Model",style=MaterialTheme.typography.titleLarge)
+ Card(Modifier.fillMaxWidth(),colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surfaceVariant)){
+ Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(6.dp)){
+ Text(s.modelName.ifBlank{"No Model Loaded"},style=MaterialTheme.typography.titleMedium,fontWeight=androidx.compose.ui.text.font.FontWeight.Bold)
+ Text(when(model){ModelState.Unloaded->"Status: Unloaded";ModelState.Loading->"Status: Loading into RAM…";is ModelState.Ready->"Status: Loaded · ${model.context} context tokens";is ModelState.Error->"Status Error: "+model.message},style=MaterialTheme.typography.bodyMedium)
+ Spacer(Modifier.height(4.dp))
+ Button(onClick=onOpenModelManager){Text("Manage & Download Models")}
+ }
  }
  Text("Context size (changing it unloads the model)")
  Row{listOf(1024,2048,4096).forEach{n->FilterChip(selected=s.context==n,onClick={save("context",n.toString())},enabled=!busy,label={Text(n.toString())});Spacer(Modifier.width(8.dp))}}

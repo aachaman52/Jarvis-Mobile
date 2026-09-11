@@ -4,17 +4,54 @@ import android.content.*
 import android.net.*
 import android.os.*
 
-data class DeviceProfile(val totalRamMb:Long,val availableRamMb:Long,val cpuCores:Int,val androidVersion:Int,val freeStorageMb:Long)
-enum class ModelTier { LITE,BALANCED,HIGH }
-data class Recommendation(val tier:ModelTier,val description:String)
-interface ModelRecommender { fun recommend(device:DeviceProfile):Recommendation }
-class DefaultModelRecommender:ModelRecommender {
- override fun recommend(device:DeviceProfile)=when {
- device.totalRamMb<5000 -> Recommendation(ModelTier.LITE,"~1B Q4")
- device.totalRamMb<7000 -> Recommendation(ModelTier.BALANCED,"~1–2B Q4")
- device.totalRamMb<10500 -> Recommendation(ModelTier.BALANCED,"~2–3B Q4")
- else -> Recommendation(ModelTier.HIGH,"~3–4B Q4")
- }
+data class DeviceProfile(val totalRamMb: Long, val availableRamMb: Long, val cpuCores: Int, val androidVersion: Int, val freeStorageMb: Long) {
+    val totalRamGbText: String get() = "${(totalRamMb + 512) / 1024} GB"
+    val freeStorageGbText: String get() = String.format(java.util.Locale.US, "%.1f GB", freeStorageMb.toDouble() / 1024.0)
+}
+
+enum class ModelTier { LITE, BALANCED, HIGH }
+
+data class Recommendation(
+    val tier: ModelTier,
+    val model: ModelDefinition?,
+    val description: String,
+    val reason: String
+)
+
+interface ModelRecommender {
+    fun recommend(device: DeviceProfile): Recommendation
+}
+
+class DefaultModelRecommender : ModelRecommender {
+    override fun recommend(device: DeviceProfile): Recommendation {
+        val fitting = ModelCatalog.models.filter { model ->
+            device.totalRamMb >= model.minRamMb && (device.freeStorageMb * 1024 * 1024) >= model.requiredStorageBytes
+        }
+        val best = fitting.maxByOrNull { it.recommendedRamMb }
+            ?: ModelCatalog.models.firstOrNull()
+
+        return when {
+            best == null -> Recommendation(ModelTier.LITE, null, "No model fits", "Insufficient storage or memory")
+            best.tier == ModelTier.BALANCED -> Recommendation(
+                tier = ModelTier.BALANCED,
+                model = best,
+                description = "${best.displayName} ${best.quantization} ~${best.sizeGbText}",
+                reason = "Best balance of reasoning quality and speed for your device (${device.totalRamGbText} RAM, ${device.cpuCores} cores)."
+            )
+            best.tier == ModelTier.LITE -> Recommendation(
+                tier = ModelTier.LITE,
+                model = best,
+                description = "${best.displayName} ${best.quantization} ~${best.sizeGbText}",
+                reason = "Lightweight footprint optimized for smooth execution on your hardware."
+            )
+            else -> Recommendation(
+                tier = ModelTier.HIGH,
+                model = best,
+                description = "${best.displayName} ${best.quantization} ~${best.sizeGbText}",
+                reason = "High parameter model recommended for power hardware."
+            )
+        }
+    }
 }
 data class DeviceState(val profile:DeviceProfile,val battery:Int,val thermal:Int,val batteryCelsius:Float?,val online:Boolean)
 class DeviceMonitor(private val context:Context) {
